@@ -1,0 +1,40 @@
+name: Daily Real Estate News Bot
+
+on:
+  schedule:
+    - cron: '0 20 * * *' # 매일 한국 시간 오전 5시 (UTC 20:00) 실행
+  workflow_dispatch: # 수동 실행 버튼 활성화
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 깃허브 저장소에 쓰기 권한 부여
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SAVE_DIR: "reports"
+        run: python real_estate_bot.py
+
+      - name: Commit and Push Reports
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          git commit -m "Add daily real estate report: $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push

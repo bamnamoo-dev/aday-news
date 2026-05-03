@@ -1,0 +1,17 @@
+📅 생성일시: 2026-05-03 13:45:41
+🚀 본 파일은 블로그 포스팅에 바로 사용할 수 있도록 구성되었습니다.
+
+============================================================
+          [ 1단계: 오늘의 주요 뉴스 및 요약 링크 ]
+============================================================
+
+요약을 생성하지 못했습니다.
+
+============================================================
+          [ 2단계: 블로그 포스팅 원고 ]
+============================================================
+
+AI 통신 오류: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Max retries exceeded with url: /v1beta/models/gemini-3-flash-preview:generateContent?key=AIzaSyCaquuarnay9jrKArG6b5x7Fcz4do1RSB8 (Caused by NameResolutionError("HTTPSConnection(host='generativelanguage.googleapis.com', port=443): Failed to resolve 'generativelanguage.googleapis.com' ([Errno 11001] getaddrinfo failed)"))
+
+------------------------------------------------------------
+제작: 니크의 오늘의 부동산 소식
