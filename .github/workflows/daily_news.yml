@@ -28,6 +28,8 @@ jobs:
       - name: Run Bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           SAVE_DIR: "reports"
         run: python real_estate_bot.py
 

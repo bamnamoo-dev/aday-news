@@ -5,6 +5,11 @@ from datetime import datetime, timedelta
 import json
 import time
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.header import Header
+
 try:
     from docx import Document
     from docx.shared import Pt
@@ -14,11 +19,14 @@ except ImportError:
 # ==========================================
 # 1. 설정 (Settings)
 # ==========================================
-# GitHub Secrets나 환경 변수에서 API 키를 가져옵니다.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_DEFAULT_OR_TEST_KEY")
-# 저장 경로는 프로젝트 내부의 reports 폴더를 기본값으로 사용합니다.
 SAVE_DIR = os.getenv("SAVE_DIR", "reports")
 MAX_NEWS_COUNT = 10
+
+# 이메일 설정
+EMAIL_SENDER = os.getenv("EMAIL_USER")       # 보내는 사람 (본인 지메일)
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD") # 구글 앱 비밀번호
+EMAIL_RECEIVER = "bamnamoo@gmail.com"        # 받는 사람
 
 # 키워드 설정
 INCLUDE_KEYWORDS = [
@@ -153,6 +161,31 @@ def save_as_docx(full_path, report_content):
         print(f"DOCX 저장 중 오류: {e}")
         return False
 
+def send_email(subject, body):
+    """분석 리포트를 이메일로 발송"""
+    if not EMAIL_SENDER or not EMAIL_PASSWORD:
+        print("공지: 이메일 설정(EMAIL_USER, EMAIL_PASSWORD)이 되어있지 않아 메일 발송을 건너뜁니다.")
+        return False
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = EMAIL_RECEIVER
+        msg['Subject'] = Header(subject, 'utf-8')
+        
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        
+        # SMTP 서버 연결 (Gmail 기준)
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+        
+        print(f"성공! 이메일이 발송되었습니다: {EMAIL_RECEIVER}")
+        return True
+    except Exception as e:
+        print(f"이메일 발송 중 오류: {e}")
+        return False
+
 # ==========================================
 # 4. 메인 실행 (Main)
 # ==========================================
@@ -217,7 +250,7 @@ def main():
     report += blog_post.strip()
     
     report += "\n\n" + "-"*60 + "\n"
-    report += "제작: 니크의 오늘의 부동산 소식\n"
+    report += "제작: 부동산 뉴스 자동화 로봇\n"
 
     # 저장
     if not os.path.exists(SAVE_DIR):
@@ -241,6 +274,10 @@ def main():
             print(f"성공! DOCX 보고서가 저장되었습니다: {docx_path}")
     else:
         print("공지: 'python-docx' 라이브력이 없어 .docx 저장을 건너뜁니다.")
+
+    # 3. 이메일 발송
+    email_subject = f"[오늘의 부동산 포스트] {today.strftime('%Y-%m-%d')} 분석 리포트"
+    send_email(email_subject, report)
 
 if __name__ == "__main__":
     main()
