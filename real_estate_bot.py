@@ -9,6 +9,10 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
+from dotenv import load_dotenv
+
+# 로컬 .env 파일 로드 (환경 변수 설정)
+load_dotenv()
 
 try:
     from docx import Document
@@ -50,8 +54,8 @@ EXCLUDE_KEYWORDS = [
 # 2. 뉴스 수집 로봇 (Crawler)
 # ==========================================
 def get_ranking_news(date_str):
-    """특정 날짜의 네이버 경제 랭킹 뉴스를 가져옴"""
-    url = f"https://news.naver.com/main/ranking/popularDay.naver?sectionId=101&date={date_str}"
+    # 변경: 경제 내 '부동산' 섹션 랭킹 (이게 가장 확실합니다)
+url = f"https://news.naver.com/main/ranking/popularDay.naver?sectionId=101&subSectionId=261&date={date_str}"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     
     try:
@@ -109,8 +113,14 @@ def analyze_with_gemini(news_data):
         content_snippet = item['content'][:2000] 
         context_text += f"\n[뉴스 {i+1}]\n제목: {item['title']}\n링크: {item['link']}\n내용: {content_snippet}\n"
     
-    prompt = f"""
-    당신은 부동산 전문 분석가입니다. 아래 제공된 10개의 부동산 뉴스 원문을 바탕으로 다음 두 가지를 작성하세요.
+    # 프롬프트 부분 수정 예시
+prompt = f"""
+당신은 부동산 전문 분석가입니다. 아래 제공된 뉴스 목록 중 **부동산 시장 흐름, 정책, 투자, 분양**과 직접적인 관련이 있는 뉴스만 선별하여 분석하세요.
+
+[필터링 규칙]
+- 단순 화재, 정전, 고독사, 살인사건 등 '사회적 사건/사고'는 부동산 가치 분석에 불필요하므로 절대 포함하지 마세요.
+- 연예인 집 공개, 단순 가십성 뉴스도 제외하세요.
+- 오직 시장 전망, 정책 변화, 신도시 소식, 재개발 현황 등 '경제적 가치'가 있는 뉴스만 최대 10개 선택하세요.
 
     [작성 항목]
     1. 오늘의 주요 뉴스 및 요약 링크: 
