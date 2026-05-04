@@ -2,7 +2,7 @@ name: Daily Real Estate News Bot
 
 on:
   schedule:
-    - cron: '0 20 * * *' # 매일 한국 시간 오전 5시 (UTC 20:00) 실행
+    - cron: '57 19 * * *' # 매일 한국 시간 오전 4시 57분 (UTC 20:00) 실행
   workflow_dispatch: # 수동 실행 버튼 활성화
 
 jobs:
