@@ -139,7 +139,7 @@ prompt = f"""
     """
 
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
+    "contents": [{"parts": [{"text": prompt}]}]
     }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={GEMINI_API_KEY}"
     
