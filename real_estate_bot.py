@@ -4,21 +4,21 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import json
 import time
+import concurrent.futures
 
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from email.header import Header
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 # 로컬 .env 파일 로드 (환경 변수 설정)
 load_dotenv()
 
-try:
-    from docx import Document
-    from docx.shared import Pt
-except ImportError:
-    pass
+# docx 관련 임포트 삭제됨
 
 # ==========================================
 # 1. 설정 (Settings)
@@ -59,7 +59,7 @@ def get_ranking_news(date_str):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         news_list = []
         
@@ -89,7 +89,7 @@ def get_article_content(url):
     """뉴스 원문 내용을 추출"""
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         content_tag = soup.select_one('#dic_area') or soup.select_one('#articleBodyContents')
@@ -105,16 +105,24 @@ def get_article_content(url):
 # 3. AI 분석 로봇 (Gemini 3)
 # ==========================================
 def analyze_with_gemini(news_data):
-    """Gemini API를 사용하여 블로그 원고와 요약 리스트를 생성"""
+    """Gemini SDK를 사용하여 블로그 원고와 요약 리스트를 생성"""
     print("AI가 블로그 포스팅 원고와 요약을 작성 중입니다...")
     
-    context_text = ""
-    for i, item in enumerate(news_data):
-        content_snippet = item['content'][:2000] 
-        context_text += f"\n[뉴스 {i+1}]\n제목: {item['title']}\n링크: {item['link']}\n내용: {content_snippet}\n"
-    
-    # 프롬프트 부분 수정 예시
-prompt = f"""
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_DEFAULT_OR_TEST_KEY":
+        return "AI 분석 오류: API 키가 설정되지 않았습니다."
+
+    try:
+        # API 설정
+        genai.configure(api_key=GEMINI_API_KEY)
+        # 안정적인 모델명 사용
+        model = genai.GenerativeModel('gemini-3-flash-preview')
+        
+        context_text = ""
+        for i, item in enumerate(news_data):
+            content_snippet = item['content'][:2000] 
+            context_text += f"\n[뉴스 {i+1}]\n제목: {item['title']}\n링크: {item['link']}\n내용: {content_snippet}\n"
+        
+        prompt = f"""
 당신은 부동산 전문 분석가입니다. 아래 제공된 뉴스 목록 중 **부동산 시장 흐름, 정책, 투자, 분양**과 직접적인 관련이 있는 뉴스만 선별하여 분석하세요.
 
 [필터링 규칙]
@@ -136,47 +144,117 @@ prompt = f"""
 
     [입력 데이터]
     {context_text}
-    """
-
-    payload = {
-    "contents": [{"parts": [{"text": prompt}]}]
-    }
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={GEMINI_API_KEY}"
-    
-    try:
-        response = requests.post(url, json=payload, headers={'Content-Type': 'application/json'})
-        if response.status_code == 200:
-            return response.json()['candidates'][0]['content']['parts'][0]['text']
-        else:
-            return f"AI 분석 오류: {response.text}"
+        """
+        response = model.generate_content(prompt)
+        return response.text
+        
     except Exception as e:
-        return f"AI 통신 오류: {e}"
+        # SSL 에러나 일시적인 통신 오류 시 재시도 로직 추가 고려 가능
+        # 여기서는 단순 에러 메시지 반환 대신 재시도를 1회 시도해봅니다.
+        print(f"AI 호출 중 오류 발생 ({e}), 5초 후 재시도합니다...")
+        time.sleep(5)
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as retry_e:
+            return f"AI 분석 오류 (재시도 실패): {retry_e}"
 
-def save_as_docx(full_path, report_content):
-    """보고서 내용을 .docx 파일로 저장"""
+def save_as_html(full_path, report_content):
+    """보고서 내용을 미려한 스타일의 HTML 파일로 저장"""
     try:
-        doc = Document()
-        title_line = report_content.split('\n')[0]
-        doc.add_heading(title_line, 0)
-        for line in report_content.split('\n')[1:]:
-            if line.startswith('='):
-                p = doc.add_paragraph()
-                run = p.add_run(line)
-                run.bold = True
-            elif line.startswith('###'):
-                doc.add_heading(line.replace('#', '').strip(), level=1)
-            elif line.startswith('####'):
-                doc.add_heading(line.replace('#', '').strip(), level=2)
+        import re
+        
+        # 더 세련된 스타일을 위해 섹션별로 구분
+        sections = report_content.split('============================================================')
+        
+        formatted_content = ""
+        for i, section in enumerate(sections):
+            if not section.strip(): continue
+            
+            section_clean = section.strip()
+            
+            # URL을 클릭 가능한 링크로 변환하는 함수
+            def make_clickable(text):
+                # 마크다운 링크 [제목](링크) 처리
+                text = re.sub(r'\[([^\]]+)\]\((https?://[^\)]+)\)', r'<a href="\2" target="_blank">\1</a>', text)
+                # 일반 URL 처리 (이미 <a> 태그 내부에 있는 것은 제외)
+                text = re.sub(r'(?<!href=")(https?://[^\s<]+)', r'<a href="\1" target="_blank">\1</a>', text)
+                return text
+
+            if "1단계" in section_clean:
+                title = "1단계: 오늘의 주요 뉴스 및 요약 링크"
+                content = section_clean.split(']')[1] if ']' in section_clean else section_clean
+                content_html = make_clickable(content.strip().replace("\n", "<br>"))
+                formatted_content += f'<div class="section"><h2>{title}</h2><div class="content">{content_html}</div></div>'
+            elif "2단계" in section_clean:
+                title = "2단계: 블로그 포스팅 원고"
+                content = section_clean.split(']')[1] if ']' in section_clean else section_clean
+                
+                content_html = content.strip()
+                content_html = re.sub(r'### (.*)', r'<h3>\1</h3>', content_html)
+                content_html = re.sub(r'## (.*)', r'<h2>\1</h2>', content_html)
+                content_html = re.sub(r'# (.*)', r'<h1>\1</h1>', content_html)
+                content_html = make_clickable(content_html.replace('\n', '<br>'))
+                
+                formatted_content += f'<div class="section blog-post"><h2>{title}</h2><div class="content">{content_html}</div></div>'
             else:
-                doc.add_paragraph(line)
-        doc.save(full_path)
+                formatted_content += f'<div class="header-info">{make_clickable(section_clean.replace("\n", "<br>"))}</div>'
+
+        html_template = f"""
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 부동산 포스트</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body {{
+            font-family: 'Noto Sans KR', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #f8f9fa;
+        }}
+        .container {{
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }}
+        h1 {{ color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }}
+        h2 {{ color: #202124; margin-top: 30px; border-left: 5px solid #1a73e8; padding-left: 15px; }}
+        h3 {{ color: #444; margin-top: 20px; }}
+        .section {{ margin-bottom: 40px; }}
+        .content {{ background: #fff; padding: 10px 0; }}
+        .header-info {{ font-size: 0.9em; color: #666; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+        .footer {{ margin-top: 50px; text-align: center; font-size: 0.8em; color: #999; border-top: 1px solid #eee; padding-top: 20px; }}
+        a {{ color: #1a73e8; text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
+        .blog-post {{ background-color: #fff; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        {formatted_content}
+        <div class="footer">
+            제작: 니크의 부동산 정보 | 생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        </div>
+    </div>
+</body>
+</html>
+"""
+        with open(full_path, "w", encoding="utf-8") as f:
+            f.write(html_template)
         return True
     except Exception as e:
-        print(f"DOCX 저장 중 오류: {e}")
+        print(f"HTML 저장 중 오류: {e}")
         return False
 
-def send_email(subject, body):
-    """분석 리포트를 이메일로 발송"""
+def send_email(subject, body, attachment_path=None):
+    """분석 리포트를 이메일로 발송 (첨부파일 지원)"""
     if not EMAIL_SENDER or not EMAIL_PASSWORD:
         print("공지: 이메일 설정(EMAIL_USER, EMAIL_PASSWORD)이 되어있지 않아 메일 발송을 건너뜁니다.")
         return False
@@ -187,10 +265,31 @@ def send_email(subject, body):
         msg['To'] = EMAIL_RECEIVER
         msg['Subject'] = Header(subject, 'utf-8')
         
+        # 메일 본문 추가
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
         
-        # SMTP 서버 연결 (Gmail 기준)
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        # 첨부파일 추가 (HTML 문서 등)
+        if attachment_path and os.path.exists(attachment_path):
+            try:
+                with open(attachment_path, "rb") as f:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(f.read())
+                
+                encoders.encode_base64(part)
+                
+                # 파일명 설정
+                filename = os.path.basename(attachment_path)
+                part.add_header(
+                    "Content-Disposition",
+                    f"attachment; filename={Header(filename, 'utf-8').encode()}",
+                )
+                msg.attach(part)
+                print(f"첨부파일 추가 성공: {filename}")
+            except Exception as attachment_e:
+                print(f"첨부파일 추가 중 오류: {attachment_e}")
+
+        # SMTP 서버 연결 (Gmail 기준) - 타임아웃 15초 추가
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
             server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
         
@@ -231,10 +330,25 @@ def main():
         print("분석할 부동산 뉴스를 찾지 못했습니다.")
         return
 
-    print(f"총 {len(collected_news)}개의 뉴스 원문을 추출합니다...")
-    for item in collected_news:
-        item['content'] = get_article_content(item['link'])
-        time.sleep(0.5)
+    print(f"총 {len(collected_news)}개의 뉴스 원문을 병렬로 추출합니다...", flush=True)
+    
+    def fetch_and_update(news_item, index, total):
+        try:
+            print(f"[{index+1}/{total}] 본문 추출 중: {news_item['title'][:30]}...", flush=True)
+        except UnicodeEncodeError:
+            print(f"[{index+1}/{total}] 본문 추출 중: [제목 인코딩 오류]...", flush=True)
+        news_item['content'] = get_article_content(news_item['link'])
+        return news_item
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # 인덱스와 함께 작업 제출
+        future_to_news = {executor.submit(fetch_and_update, item, i, len(collected_news)): i for i, item in enumerate(collected_news)}
+        for future in concurrent.futures.as_completed(future_to_news):
+            # 작업 완료 대기 (결과는 이미 item['content']에 반영됨)
+            try:
+                future.result()
+            except Exception as e:
+                print(f"추출 중 에러 발생: {e}")
 
     # AI 분석 (요약 + 블로그 스타일)
     ai_output = analyze_with_gemini(collected_news)
@@ -281,17 +395,14 @@ def main():
     except Exception as e:
         print(f"TXT 저장 중 오류: {e}")
         
-    # 2. DOCX 저장
-    docx_path = os.path.join(SAVE_DIR, base_name + ".docx")
-    if 'Document' in globals():
-        if save_as_docx(docx_path, report):
-            print(f"성공! DOCX 보고서가 저장되었습니다: {docx_path}")
-    else:
-        print("공지: 'python-docx' 라이브력이 없어 .docx 저장을 건너뜁니다.")
+    # 2. HTML 저장
+    html_path = os.path.join(SAVE_DIR, base_name + ".html")
+    if save_as_html(html_path, report):
+        print(f"성공! HTML 보고서가 저장되었습니다: {html_path}")
 
     # 3. 이메일 발송
     email_subject = f"[오늘의 부동산 포스트] {today.strftime('%Y-%m-%d')} 분석 리포트"
-    send_email(email_subject, report)
+    send_email(email_subject, report, attachment_path=html_path)
 
 if __name__ == "__main__":
     main()
