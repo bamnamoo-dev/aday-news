@@ -30,7 +30,8 @@ MAX_NEWS_COUNT = 10
 # 이메일 설정
 EMAIL_SENDER = os.getenv("EMAIL_USER")       # 보내는 사람 (본인 지메일)
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD") # 구글 앱 비밀번호
-EMAIL_RECEIVER = "bamnamoo@gmail.com"        # 받는 사람
+# 여러 명의 수신자를 지원하기 위해 환경 변수에서 쉼표로 구분된 리스트를 가져옵니다.
+EMAIL_RECEIVERS = [addr.strip() for addr in os.getenv("EMAIL_RECEIVERS", "bamnamoo@gmail.com").split(",") if addr.strip()]
 
 # 키워드 설정 (부동산 핵심 키워드)
 INCLUDE_KEYWORDS = [
@@ -265,7 +266,7 @@ def send_email(subject, body, attachment_path=None):
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_SENDER
-        msg['To'] = EMAIL_RECEIVER
+        msg['To'] = ", ".join(EMAIL_RECEIVERS)
         msg['Subject'] = Header(subject, 'utf-8')
         
         # 메일 본문 추가
@@ -294,9 +295,9 @@ def send_email(subject, body, attachment_path=None):
         # SMTP 서버 연결 (Gmail 기준) - 타임아웃 15초 추가
         with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+            server.sendmail(EMAIL_SENDER, EMAIL_RECEIVERS, msg.as_string())
         
-        print(f"성공! 이메일이 발송되었습니다: {EMAIL_RECEIVER}")
+        print(f"성공! 이메일이 발송되었습니다: {', '.join(EMAIL_RECEIVERS)}")
         return True
     except Exception as e:
         print(f"이메일 발송 중 오류: {e}")
