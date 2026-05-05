@@ -55,7 +55,7 @@ EXCLUDE_KEYWORDS = [
 # ==========================================
 def get_ranking_news(date_str):
     # 변경: 경제 내 '부동산' 섹션 랭킹 (이게 가장 확실합니다)
-url = f"https://news.naver.com/main/ranking/popularDay.naver?sectionId=101&subSectionId=261&date={date_str}"
+    url = f"https://news.naver.com/main/ranking/popularDay.naver?sectionId=101&subSectionId=261&date={date_str}"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
     
     try:
