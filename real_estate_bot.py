@@ -184,7 +184,8 @@ def save_as_html(full_path, report_content):
             if "1단계" in section_clean:
                 title = "1단계: 오늘의 주요 뉴스 및 요약 링크"
                 content = section_clean.split(']')[1] if ']' in section_clean else section_clean
-                content_html = make_clickable(content.strip().replace("\n", "<br>"))
+                content_br = content.strip().replace("\n", "<br>")
+                content_html = make_clickable(content_br)
                 formatted_content += f'<div class="section"><h2>{title}</h2><div class="content">{content_html}</div></div>'
             elif "2단계" in section_clean:
                 title = "2단계: 블로그 포스팅 원고"
@@ -198,7 +199,9 @@ def save_as_html(full_path, report_content):
                 
                 formatted_content += f'<div class="section blog-post"><h2>{title}</h2><div class="content">{content_html}</div></div>'
             else:
-                formatted_content += f'<div class="header-info">{make_clickable(section_clean.replace("\n", "<br>"))}</div>'
+                section_br = section_clean.replace("\n", "<br>")
+                content_html = make_clickable(section_br)
+                formatted_content += f'<div class="header-info">{content_html}</div>'
 
         html_template = f"""
 <!DOCTYPE html>
