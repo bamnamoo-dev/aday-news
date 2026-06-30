@@ -1,0 +1,39 @@
+📅 생성일시: 2026-06-30 22:01:43
+🚀 본 파일은 블로그 포스팅에 바로 사용할 수 있도록 구성되었습니다.
+
+============================================================
+          [ 1단계: 오늘의 주요 뉴스 및 요약 링크 ]
+============================================================
+
+요약을 생성하지 못했습니다.
+
+============================================================
+          [ 2단계: 블로그 포스팅 원고 ]
+============================================================
+
+AI 분석 오류 (재시도 실패): 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 5, model: gemini-3-flash
+Please retry in 16.734985065s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-3-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 5
+}
+, retry_delay {
+  seconds: 16
+}
+]
+
+------------------------------------------------------------
+제작: 니크의 부동산 정보
